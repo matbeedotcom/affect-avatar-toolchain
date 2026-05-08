@@ -1,0 +1,14 @@
+{
+  "name": "warm_admiration",
+  "description": "Friend shares a creative win / achievement / good news. Agent responds with warmth and present-celebration. Events are user_greeting + user_question only — `user_praise` is intentionally avoided here because its reward_signal=0.8 in the appraisal layer drives joy→assertiveness up, producing a *bold/declarative* register (V=+0.39, D=+0.63) that reviewers read as boastful rather than warm-celebratory. user_greeting (social_safety=0.5) + user_question (novelty=0.4) lift warmth and curiosity without spiking joy, yielding a more responsive register suitable for `look at the painting I just finished`-type prompts.",
+  "duration_ms": 30000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "g1", "timestamp_ms":  1000, "modality": "text", "kind": "user_greeting", "confidence": 1.0 },
+    { "id": "q1", "timestamp_ms":  4000, "modality": "text", "kind": "user_question", "confidence": 1.0 },
+    { "id": "g2", "timestamp_ms":  9000, "modality": "text", "kind": "user_greeting", "confidence": 1.0 },
+    { "id": "q2", "timestamp_ms": 14000, "modality": "text", "kind": "user_question", "confidence": 1.0 },
+    { "id": "g3", "timestamp_ms": 20000, "modality": "text", "kind": "user_greeting", "confidence": 1.0 }
+  ],
+  "regulation": { "safety_dampening_floor": 0.0 }
+}

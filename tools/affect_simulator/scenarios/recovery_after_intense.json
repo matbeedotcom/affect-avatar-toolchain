@@ -1,0 +1,11 @@
+{
+  "name": "recovery_after_intense",
+  "description": "Intense burst (3 events) then 60 s of silence. Verifies decay-toward-baseline trajectory.",
+  "duration_ms": 90000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "burst1", "timestamp_ms": 1000, "modality": "task", "kind": "tool_failure", "confidence": 1.0 },
+    { "id": "burst2", "timestamp_ms": 3000, "modality": "text", "kind": "user_blame",   "confidence": 1.0 },
+    { "id": "burst3", "timestamp_ms": 5000, "modality": "task", "kind": "tool_failure", "confidence": 1.0 }
+  ]
+}

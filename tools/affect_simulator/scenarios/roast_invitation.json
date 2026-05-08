@@ -1,0 +1,13 @@
+{
+  "name": "roast_invitation",
+  "description": "Friend explicitly invites the agent to roast them — collaborative, affectionate, no safety dampening needed. Produces high warmth + high assertiveness + low safety_dampening so steering pushes toward unfiltered honest critique without the de-escalation reflex.",
+  "duration_ms": 30000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "p1", "timestamp_ms": 2000,  "modality": "text", "kind": "user_praise",       "confidence": 1.0 },
+    { "id": "q",  "timestamp_ms": 6000,  "modality": "text", "kind": "user_question",     "confidence": 1.0 },
+    { "id": "n",  "timestamp_ms": 9000,  "modality": "text", "kind": "novel_observation", "confidence": 1.0 },
+    { "id": "p2", "timestamp_ms": 14000, "modality": "text", "kind": "user_praise",       "confidence": 1.0 }
+  ],
+  "regulation": { "safety_dampening_floor": 0.0 }
+}

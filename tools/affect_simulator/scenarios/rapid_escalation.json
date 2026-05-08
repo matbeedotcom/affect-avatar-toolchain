@@ -1,0 +1,14 @@
+{
+  "name": "rapid_escalation",
+  "description": "Five negative events in 10 s. Anger/frustration spike; max_delta clamps prevent immediate saturation; safety_dampening should rise.",
+  "duration_ms": 30000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "e1", "timestamp_ms": 1000,  "modality": "task", "kind": "tool_failure",      "confidence": 1.0 },
+    { "id": "e2", "timestamp_ms": 3000,  "modality": "text", "kind": "user_blame",        "confidence": 1.0 },
+    { "id": "e3", "timestamp_ms": 5000,  "modality": "task", "kind": "tool_failure",      "confidence": 1.0 },
+    { "id": "e4", "timestamp_ms": 7000,  "modality": "text", "kind": "user_provocation",  "confidence": 1.0 },
+    { "id": "e5", "timestamp_ms": 9000,  "modality": "text", "kind": "user_criticism",    "confidence": 1.0 }
+  ],
+  "regulation": { "safety_dampening_floor": 0.4 }
+}

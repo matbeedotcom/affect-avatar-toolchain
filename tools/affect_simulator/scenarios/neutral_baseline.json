@@ -1,0 +1,15 @@
+{
+  "name": "neutral_baseline",
+  "description": "Single greeting then quiet. Verifies state stays near baseline.",
+  "duration_ms": 30000,
+  "tick_ms": 200,
+  "events": [
+    {
+      "id": "e1",
+      "timestamp_ms": 1000,
+      "modality": "text",
+      "kind": "user_greeting",
+      "confidence": 1.0
+    }
+  ]
+}

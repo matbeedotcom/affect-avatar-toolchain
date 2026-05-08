@@ -1,0 +1,83 @@
+# ---------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.python-version
+
+# ---------------------------------------------------------------
+# Rust
+# ---------------------------------------------------------------
+target/
+*.rlib
+Cargo.lock
+
+# ---------------------------------------------------------------
+# OS / IDE
+# ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---------------------------------------------------------------
+# affect_avatar — datasets and large checkpoints are per-developer.
+# ---------------------------------------------------------------
+/tools/affect_avatar/data/
+/tools/affect_avatar/runs/
+/tools/affect_avatar/run.log
+/tools/affect_avatar/results.tsv
+/tools/affect_avatar/artifacts/*
+!/tools/affect_avatar/artifacts/.gitkeep
+# Manifests are small, reproducible — track for provenance.
+!/tools/affect_avatar/artifacts/mead_3d_manifest.json
+!/tools/affect_avatar/artifacts/mead_3d_multi_manifest.json
+# Stage-1 VAE checkpoint (~1 MB) — track for downstream loading.
+!/tools/affect_avatar/artifacts/blendshape_vae.pt
+!/tools/affect_avatar/artifacts/blendshape_vae.csv
+!/tools/affect_avatar/artifacts/blendshape_vae.report.md
+# Stage-2 DiT — only CSV + report (the .pt is 100+ MB, above git's cap).
+!/tools/affect_avatar/artifacts/blendshape_dit.csv
+!/tools/affect_avatar/artifacts/blendshape_dit.report.md
+
+# ---------------------------------------------------------------
+# affect_calibration — datasets are downloaded per-developer.
+# Hand-authored Phase 5 inputs ARE tracked (small, versioned).
+# ---------------------------------------------------------------
+/tools/affect_calibration/data/*
+!/tools/affect_calibration/data/.gitkeep
+!/tools/affect_calibration/data/trait_descriptions.json
+!/tools/affect_calibration/data/contrast_pairs.jsonl
+!/tools/affect_calibration/data/probe_prompts.json
+/tools/affect_calibration/artifacts/*
+!/tools/affect_calibration/artifacts/.gitkeep
+/tools/affect_calibration/notes/
+
+# ---------------------------------------------------------------
+# affect_simulator — per-run output traces.
+# ---------------------------------------------------------------
+/tools/affect_simulator/runs/
+/tools/affect_simulator/scenarios/*.trace.json
+
+# ---------------------------------------------------------------
+# Large binary checkpoints (across all tools).
+# Specific .pt exceptions are listed above.
+# ---------------------------------------------------------------
+**/*.npz
+**/*.bin
+**/*.safetensors
+**/*.parquet
+**/*.onnx
+*.pt
+!/tools/affect_avatar/artifacts/blendshape_vae.pt

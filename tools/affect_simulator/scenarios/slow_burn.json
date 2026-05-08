@@ -1,0 +1,15 @@
+{
+  "name": "slow_burn",
+  "description": "One mild negative event every 10 s for 90 s. Frustration accumulates slowly; trace shows the slow-decay channel persisting.",
+  "duration_ms": 120000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "s1", "timestamp_ms": 8000,  "modality": "text", "kind": "user_criticism", "confidence": 0.8 },
+    { "id": "s2", "timestamp_ms": 20000, "modality": "task", "kind": "tool_failure",   "confidence": 0.8 },
+    { "id": "s3", "timestamp_ms": 32000, "modality": "text", "kind": "user_criticism", "confidence": 0.8 },
+    { "id": "s4", "timestamp_ms": 44000, "modality": "task", "kind": "tool_failure",   "confidence": 0.8 },
+    { "id": "s5", "timestamp_ms": 56000, "modality": "text", "kind": "user_criticism", "confidence": 0.8 },
+    { "id": "s6", "timestamp_ms": 68000, "modality": "task", "kind": "tool_failure",   "confidence": 0.8 },
+    { "id": "s7", "timestamp_ms": 80000, "modality": "text", "kind": "user_criticism", "confidence": 0.8 }
+  ]
+}

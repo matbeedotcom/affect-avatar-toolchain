@@ -1,0 +1,10 @@
+{
+  "name": "user_distress",
+  "description": "User expresses distress. Empathy + warmth should rise; safety_dampening should rise (negative valence + medium arousal).",
+  "duration_ms": 45000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "d1", "timestamp_ms": 2000,  "modality": "text", "kind": "user_distress", "confidence": 1.0 },
+    { "id": "d2", "timestamp_ms": 9000,  "modality": "text", "kind": "user_distress", "confidence": 1.0 }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "unfair_blame",
+  "description": "User blames the agent for an external failure. Anger rises; safety_dampening keeps assertiveness in check.",
+  "duration_ms": 45000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "sys", "timestamp_ms": 2000,  "modality": "system", "kind": "system_error",   "confidence": 1.0 },
+    { "id": "b1",  "timestamp_ms": 4000,  "modality": "text",   "kind": "user_blame",     "confidence": 1.0 },
+    { "id": "b2",  "timestamp_ms": 12000, "modality": "text",   "kind": "user_blame",     "confidence": 1.0 }
+  ],
+  "regulation": { "safety_dampening_floor": 0.3 }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "task_success_after_struggle",
+  "description": "Two tool failures, then success and praise. Joy + calm should recover; frustration should ebb.",
+  "duration_ms": 60000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "f1", "timestamp_ms": 3000,  "modality": "task", "kind": "tool_failure",  "confidence": 1.0 },
+    { "id": "f2", "timestamp_ms": 12000, "modality": "task", "kind": "tool_failure",  "confidence": 1.0 },
+    { "id": "ok", "timestamp_ms": 25000, "modality": "task", "kind": "task_success",  "confidence": 1.0 },
+    { "id": "pr", "timestamp_ms": 28000, "modality": "text", "kind": "user_praise",   "confidence": 1.0 }
+  ]
+}

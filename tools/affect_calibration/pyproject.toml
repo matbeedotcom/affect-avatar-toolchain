@@ -1,0 +1,35 @@
+# Affect Calibration Toolchain — Phase 0 skeleton.
+#
+# Dependencies are intentionally NOT pinned at this stage. Phase 5 fills
+# `[project.dependencies]` based on the chosen training stack
+# (PyTorch + ONNX export, faster-whisper for embedding extraction,
+#  numpy/scipy for the linear-probe step).
+
+[project]
+name = "remotemedia-affect-calibration"
+version = "0.0.0"
+description = "Offline ML pipeline producing affect-steering artifacts."
+requires-python = ">=3.11"
+authors = [{ name = "RemoteMedia" }]
+license = { text = "Proprietary" }
+readme = "README.md"
+
+# Phase 5 will populate. Expected dependencies (illustrative, not yet pinned):
+#   torch >= 2.4
+#   onnx, onnxruntime
+#   transformers (for Whisper encoder access)
+#   numpy, scipy
+#   pandas (dataset wrangling)
+#   tqdm
+dependencies = []
+
+[project.optional-dependencies]
+dev = []   # Phase 5 fills in: pytest, ruff, mypy
+
+[build-system]
+# Placeholder; Phase 5 may switch to setuptools / hatchling.
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "scripts" }

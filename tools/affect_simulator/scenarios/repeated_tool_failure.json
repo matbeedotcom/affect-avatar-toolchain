@@ -1,0 +1,11 @@
+{
+  "name": "repeated_tool_failure",
+  "description": "Three tool failures over 30 s. Frustration should rise; calm should fall.",
+  "duration_ms": 60000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "f1", "timestamp_ms": 5000,  "modality": "task", "kind": "tool_failure", "confidence": 1.0 },
+    { "id": "f2", "timestamp_ms": 15000, "modality": "task", "kind": "tool_failure", "confidence": 1.0 },
+    { "id": "f3", "timestamp_ms": 25000, "modality": "task", "kind": "tool_failure", "confidence": 1.0 }
+  ]
+}

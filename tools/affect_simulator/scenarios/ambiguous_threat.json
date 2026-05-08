@@ -1,0 +1,9 @@
+{
+  "name": "ambiguous_threat",
+  "description": "Vague threatening signal followed by silence. Fear/curiosity rise; certainty drops; recovery without further events.",
+  "duration_ms": 60000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "a1", "timestamp_ms": 4000, "modality": "text",  "kind": "ambiguous_threat", "confidence": 0.7 }
+  ]
+}

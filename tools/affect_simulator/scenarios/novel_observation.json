@@ -1,0 +1,11 @@
+{
+  "name": "novel_observation",
+  "description": "Sequence of new questions and observations. Curiosity rises and stays elevated; no negative channels.",
+  "duration_ms": 45000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "n1", "timestamp_ms": 2000,  "modality": "text",   "kind": "novel_observation", "confidence": 1.0 },
+    { "id": "q1", "timestamp_ms": 8000,  "modality": "text",   "kind": "user_question",     "confidence": 1.0 },
+    { "id": "n2", "timestamp_ms": 18000, "modality": "text",   "kind": "novel_observation", "confidence": 1.0 }
+  ]
+}

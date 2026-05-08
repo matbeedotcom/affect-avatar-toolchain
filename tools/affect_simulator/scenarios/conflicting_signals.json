@@ -1,0 +1,11 @@
+{
+  "name": "conflicting_signals",
+  "description": "Praise text contradicts negative-arousal prosody. Confidence-weighted: prosody fires at 0.7, certainty drops, fear/joy compete. The Phase 3 prosody events appear here so the manifest exercises them when prosody is wired in.",
+  "duration_ms": 30000,
+  "tick_ms": 200,
+  "events": [
+    { "id": "praise",    "timestamp_ms": 2000, "modality": "text",  "kind": "user_praise",            "confidence": 1.0 },
+    { "id": "p_arousal", "timestamp_ms": 2100, "modality": "audio", "kind": "prosody_arousal_high",   "confidence": 0.7 },
+    { "id": "p_valence", "timestamp_ms": 2200, "modality": "audio", "kind": "prosody_valence_negative","confidence": 0.7 }
+  ]
+}

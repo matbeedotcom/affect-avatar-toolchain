@@ -1,0 +1,23 @@
+[package]
+name = "affect-simulator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Text-only deterministic harness for the affect-state model (Phase 1 of activation-steering-audio-llm)"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "affect-sim"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { version = "4.4", features = ["derive"] }
+anyhow = { workspace = true }
+
+[dev-dependencies]

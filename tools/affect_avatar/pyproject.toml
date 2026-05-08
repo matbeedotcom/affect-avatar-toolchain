@@ -1,0 +1,27 @@
+[project]
+name = "affect-avatar"
+version = "0.0.0"
+description = "Audio → ARKit-52 blendshape latent-diffusion training toolchain. See docs/references/audio-blendshape-diffusion/PROJECT_PLAN.md."
+requires-python = ">=3.11"
+authors = [
+    { name = "Mathieu Gosbee", email = "acidhax@gmail.com" },
+]
+
+# Dependencies are intentionally empty in the skeleton; each phase pins
+# what it actually needs (Phase B0 needs only mediapipe + numpy +
+# opencv-python; Phase B3 adds torch + diffusers-style schedulers; etc.).
+dependencies = []
+
+[project.optional-dependencies]
+b0 = [
+    "mediapipe>=0.10",
+    "numpy>=1.26",
+    "opencv-python>=4.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scripts"]
