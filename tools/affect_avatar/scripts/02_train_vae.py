@@ -93,6 +93,16 @@ def parse_args() -> argparse.Namespace:
                    help="Crop length in frames (default ~2 s at 30 fps).")
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--kl-weight", type=float, default=1e-3)
+    p.add_argument(
+        "--channel-weight-power", type=float, default=0.0,
+        help="Power applied to per-channel inverse-stdev weights in the "
+             "reconstruction loss. 0.0 = uniform (legacy). 1.0 = pure "
+             "inverse-stdev (rare/extreme channels boosted hardest). "
+             "0.5 = sqrt-inverse-stdev (gentler). Diagnostic round-trip "
+             "showed that low-variance eye-region and cheek channels "
+             "(eyeWide, cheekPuff, browDn) collapse to near-zero in "
+             "VAE recon at power=0; values in [0.5, 1.0] should rebalance.",
+    )
     p.add_argument("--d-lat", type=int, default=16)
     p.add_argument("--hidden", type=int, default=128)
     p.add_argument("--device", default=None,
@@ -265,14 +275,15 @@ class CropDataset(Dataset):
 # Train / eval loops
 # ------------------------------------------------------------------
 
-def train_one_epoch(model, loader, optim, device, kl_weight) -> dict:
+def train_one_epoch(model, loader, optim, device, kl_weight,
+                    channel_weights=None) -> dict:
     model.train()
     losses = {"total": 0.0, "recon_mse": 0.0, "kl": 0.0}
     n = 0
     for batch in loader:
         batch = batch.to(device, non_blocking=True)
         out = model(batch)
-        ld = model.vae_loss(batch, out)
+        ld = model.vae_loss(batch, out, channel_weights=channel_weights)
         optim.zero_grad(set_to_none=True)
         ld["loss"].backward()
         optim.step()
@@ -285,14 +296,14 @@ def train_one_epoch(model, loader, optim, device, kl_weight) -> dict:
 
 
 @torch.no_grad()
-def eval_recon(model, loader, device) -> dict:
+def eval_recon(model, loader, device, channel_weights=None) -> dict:
     model.eval()
     losses = {"total": 0.0, "recon_mse": 0.0, "kl": 0.0}
     n = 0
     for batch in loader:
         batch = batch.to(device, non_blocking=True)
         out = model(batch)
-        ld = model.vae_loss(batch, out)
+        ld = model.vae_loss(batch, out, channel_weights=channel_weights)
         bs = batch.shape[0]
         losses["total"] += ld["loss"].item() * bs
         losses["recon_mse"] += ld["recon_mse"].item() * bs
@@ -358,6 +369,61 @@ def main() -> int:
     model = BlendshapeVAE(cfg).to(device)
     print(f"params: {count_params(model):,}", file=sys.stderr)
 
+    # Per-channel reconstruction weights. Two safeguards on top of the
+    # inverse-stdev formula:
+    #
+    #   1. **Dead-channel exclusion**: channels with stdev < DEAD_FLOOR
+    #      (≈always-zero in training data) get uniform weight 1.0
+    #      regardless of `channel_weight_power`. Boosting always-zero
+    #      channels by 12× (as raw inverse-stdev would for stdev=1e-4)
+    #      pulls capacity off perceptually meaningful channels — the
+    #      smoke run on this dataset showed 4 always-zero channels each
+    #      getting weight ≈12, consuming ~half the total loss attention.
+    #   2. **Dynamic-range clip**: after normalization to mean-1, clip
+    #      weights to [1/CLIP, CLIP] then re-normalize. Bounds the
+    #      max-vs-min weight ratio, preventing one rare-but-active
+    #      channel from dominating.
+    DEAD_FLOOR = 0.005
+    CLIP = 4.0
+    channel_weights_t = None
+    channel_weights_np = None
+    channel_stds_np = None
+    if args.channel_weight_power > 0.0:
+        sample = splits["train"][:200]
+        all_frames = np.concatenate([c["actions"] for c in sample], axis=0)
+        channel_stds_np = all_frames.std(axis=0).astype(np.float64)
+        is_dead = channel_stds_np < DEAD_FLOOR
+        # Floor stdev for weight computation only (so the formula doesn't
+        # divide by zero); dead channels are then forced to weight 1.
+        std_for_w = np.maximum(channel_stds_np, 1e-3)
+        raw_w = (1.0 / std_for_w) ** float(args.channel_weight_power)
+        raw_w[is_dead] = 1.0
+        w = raw_w / raw_w.mean()
+        w = np.clip(w, 1.0 / CLIP, CLIP)
+        w = w / w.mean()
+        channel_weights_np = w
+        channel_weights_t = torch.from_numpy(
+            channel_weights_np.astype(np.float32)
+        ).to(device)
+        # Show what got boosted vs attenuated for traceability.
+        order = np.argsort(channel_weights_np)
+        boosted = order[-5:][::-1]
+        attenuated = order[:5]
+        n_dead = int(is_dead.sum())
+        print(f"channel weighting: power={args.channel_weight_power} "
+              f"clip={CLIP}  dead_floor={DEAD_FLOOR}  "
+              f"({n_dead}/{len(channel_weights_np)} dead channels uniform-weighted)",
+              file=sys.stderr)
+        print(f"  weights∈[{channel_weights_np.min():.2f}, "
+              f"{channel_weights_np.max():.2f}]  mean={channel_weights_np.mean():.2f}",
+              file=sys.stderr)
+        print(f"  most boosted   chs: "
+              f"{[(int(k), round(float(channel_weights_np[k]), 2), round(float(channel_stds_np[k]), 4)) for k in boosted]}",
+              file=sys.stderr)
+        print(f"  most attenuated chs: "
+              f"{[(int(k), round(float(channel_weights_np[k]), 2), round(float(channel_stds_np[k]), 4)) for k in attenuated]}",
+              file=sys.stderr)
+
     optim = torch.optim.AdamW(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(
         optim, T_max=args.epochs, eta_min=args.lr * 1e-2,
@@ -375,8 +441,10 @@ def main() -> int:
     best_val_recon = float("inf")
     for ep in range(args.epochs):
         ep_t0 = time.time()
-        tr = train_one_epoch(model, train_loader, optim, device, args.kl_weight)
-        va = eval_recon(model, val_loader, device)
+        tr = train_one_epoch(model, train_loader, optim, device, args.kl_weight,
+                             channel_weights=channel_weights_t)
+        va = eval_recon(model, val_loader, device,
+                        channel_weights=channel_weights_t)
         sched.step()
         cur_lr = sched.get_last_lr()[0]
         ep_dt = time.time() - ep_t0
@@ -413,12 +481,18 @@ def main() -> int:
         "n_train_clips": len(splits["train"]),
         "n_val_clips": len(splits["val"]),
         "n_test_clips": len(splits["test"]),
+        "channel_weight_power": float(args.channel_weight_power),
+        "channel_weights": (channel_weights_np.astype(np.float32)
+                            if channel_weights_np is not None else None),
+        "channel_stds": (channel_stds_np.astype(np.float32)
+                         if channel_stds_np is not None else None),
     }, args.output)
 
     # Final test eval + per-channel breakdown.
     test_ds = CropDataset(splits["test"], args.crop_len, 4)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size)
-    test_metrics = eval_recon(model, test_loader, device)
+    test_metrics = eval_recon(model, test_loader, device,
+                              channel_weights=channel_weights_t)
     per_ch = _per_channel_recon(model, splits["test"], args.crop_len, device)
     _write_recon_report(
         path=args.output.with_suffix(".report.md"),
