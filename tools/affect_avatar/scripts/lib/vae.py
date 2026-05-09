@@ -43,6 +43,16 @@ class VAEConfig:
     #   occasionally drift outside [0, 1] but the loss pulls it back.
     deterministic: bool = False
     output_activation: str = "sigmoid"   # "sigmoid" | "linear"
+    # Per [STAGE1_VAE_PLAN.md §4 Exp 2](../../STAGE1_VAE_PLAN.md):
+    # `sigma_train > 0` adds gaussian noise to z during training only
+    # (`z = mu + sigma_train · ε`); inference still uses `z = mu`. The
+    # decoder learns to be locally smooth in a ball around each training
+    # latent, which is what we want at inference: DiT-sampled latents
+    # don't sit exactly on the encoder's training manifold, so a smooth
+    # decoder produces sensible blendshapes for nearby latent regions.
+    # Plan range: 0.01–0.05; AE v3 was sigma_train=0 and decoded
+    # DiT samples to ~10× higher per-frame Δ than GT.
+    sigma_train: float = 0.0
 
 
 # Channel groupings used by the deterministic-AE training loss.
@@ -61,6 +71,22 @@ GROUP_INDICES: dict[str, tuple[int, ...]] = {
                      18, 19, 20, 21),
     "cheeks_nose":  (5, 6, 7, 49, 50),
 }
+
+
+# Per [LISTENER_MODE_PLAN.md §2](../../LISTENER_MODE_PLAN.md):
+# Speech-coupled channels that should be zeroed in listener mode (the
+# assistant should not lip-sync to the user's words). Union of `jaw` +
+# `mouth_speech` from GROUP_INDICES, i.e. jawForward/Left/Right/Open
+# plus mouthClose / mouthFunnel / mouthLeft / mouthPucker / mouthRight
+# / mouthRollLower / mouthRollUpper. The `mouth_affect` group
+# (smile / frown / dimple / press / shrug / stretch / lower-down /
+# upper-up) stays active for empathic mirroring — a frozen-mouth
+# listener reads as creepy.
+LISTENER_SPEECH_ONLY_CHANNELS: tuple[int, ...] = (
+    22, 23, 24, 25,                  # jaw: jawForward, jawLeft, jawOpen, jawRight
+    26, 31, 32, 37, 38, 39, 40,      # mouth speech-shape: close, funnel, left,
+                                     # pucker, right, rollLower, rollUpper
+)
 
 
 class _ConvBlock(nn.Module):
@@ -154,6 +180,11 @@ class BlendshapeVAE(nn.Module):
 
     def reparam(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
         if self.cfg.deterministic:
+            # AE v4: optional small noise during training only — see
+            # `sigma_train` doc on VAEConfig. At inference (model.eval()),
+            # `self.training` is False so we pass through `mu` unchanged.
+            if self.training and self.cfg.sigma_train > 0:
+                return mu + self.cfg.sigma_train * torch.randn_like(mu)
             return mu
         if self.training:
             std = torch.exp(0.5 * logvar)
@@ -207,6 +238,7 @@ class BlendshapeVAE(nn.Module):
         alpha_value: float = 1.0,
         alpha_velocity: float = 0.5,
         alpha_peak: float = 0.5,
+        alpha_latent_velocity: float = 0.0,
         group_weights: Optional[dict[str, float]] = None,
     ) -> dict:
         """Grouped MSE + velocity MSE + peak MSE — no KL.
@@ -222,6 +254,16 @@ class BlendshapeVAE(nn.Module):
           Directly addresses F1's encoder-collapse-on-peaks finding —
           if the recon's per-channel max diverges from GT's max, this
           loss has gradient even when the value MSE is averaged out.
+        - **Latent velocity** (AE v4, opt-in): `||z[t+1] - z[t]||²` on
+          the latent itself. Forces the encoder to produce temporally
+          smooth latent trajectories, so the DiT — which fits the
+          encoder's latent distribution — also produces smooth
+          latents at inference. Without this, the AE's recon-side
+          velocity loss only constrains smoothness on training crops
+          where we already have GT-encoded latents; DiT-sampled
+          latents (a different distribution) decode to noisy
+          blendshapes. AE v3 with no latent-velocity penalty produced
+          ~10× higher per-frame Δ than GT on DiT samples.
         """
         recon = out["recon"]
         if recon.shape != x_btk.shape:
@@ -251,14 +293,24 @@ class BlendshapeVAE(nn.Module):
         peak_true = x_btk.amax(dim=1)
         peak_mse = (peak_pred - peak_true).pow(2).mean()
 
+        # --- Latent velocity (opt-in via alpha > 0) ---
+        z = out.get("z")
+        if alpha_latent_velocity > 0 and z is not None and z.shape[1] >= 2:
+            lat_vel = z[:, 1:] - z[:, :-1]
+            latent_vel_mse = lat_vel.pow(2).mean()
+        else:
+            latent_vel_mse = recon.new_tensor(0.0)
+
         total = (alpha_value * grouped_mse
                  + alpha_velocity * velocity_mse
-                 + alpha_peak * peak_mse)
+                 + alpha_peak * peak_mse
+                 + alpha_latent_velocity * latent_vel_mse)
         return {
             "loss": total,
             "grouped_mse": grouped_mse.detach(),
             "velocity_mse": velocity_mse.detach(),
             "peak_mse": peak_mse.detach(),
+            "latent_vel_mse": latent_vel_mse.detach(),
             # Plain element-wise MSE so logging is comparable across
             # AE and VAE training runs.
             "recon_mse": sq_err.mean().detach(),

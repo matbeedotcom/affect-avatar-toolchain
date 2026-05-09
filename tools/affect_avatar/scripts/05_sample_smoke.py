@@ -126,6 +126,17 @@ def parse_args() -> argparse.Namespace:
              "without blurring expression peaks. Set to 0 to disable.",
     )
     p.add_argument(
+        "--listener-mode", action="store_true",
+        help="Phase L0 of LISTENER_MODE_PLAN: zero out speech-coupled "
+             "channels (jawOpen, mouthFunnel, mouthRollLower/Upper, "
+             "mouthClose, mouthLeft/Right/Pucker, jawForward/Left/Right) "
+             "on the DiT sample before rendering. Empathic-mouth channels "
+             "(smile, frown, dimple, press, shrug, stretch, "
+             "lowerDown, upperUp) and upper-face channels stay active so "
+             "the assistant can still mirror affect without lip-syncing "
+             "to the user's words. No retrain required.",
+    )
+    p.add_argument(
         "--render-binary", type=Path,
         default=Path("target/release/examples/affect_face_smoke"),
         help="Path to the compiled `affect_face_smoke` binary.",
@@ -483,6 +494,19 @@ def _render_mp4_pair(*, actions_gt, sample, args, meta, audio_bytes) -> None:
         )
         print(f"smoothed sample: gaussian σ={args.smooth_sigma} frames",
               file=sys.stderr)
+
+    # Listener-mode mask: zero out speech-coupled blendshape channels
+    # so the assistant doesn't lip-sync to the user's audio. Applied to
+    # the DiT sample only — GT is left untouched as a control. See
+    # LISTENER_MODE_PLAN.md §2 for the channel split rationale.
+    if args.listener_mode:
+        import numpy as np
+        from lib.vae import LISTENER_SPEECH_ONLY_CHANNELS
+        sample_for_render = np.asarray(sample_for_render, dtype=np.float32).copy()
+        sample_for_render[:, list(LISTENER_SPEECH_ONLY_CHANNELS)] = 0.0
+        print(f"listener mode: zeroed {len(LISTENER_SPEECH_ONLY_CHANNELS)} "
+              f"speech channels on sample (indices "
+              f"{list(LISTENER_SPEECH_ONLY_CHANNELS)})", file=sys.stderr)
 
     write_arkit_jsonl(map_mead_to_arkit(actions_gt), args.render_fps, jsonl_gt)
     write_arkit_jsonl(map_mead_to_arkit(sample_for_render), args.render_fps, jsonl_sm)
