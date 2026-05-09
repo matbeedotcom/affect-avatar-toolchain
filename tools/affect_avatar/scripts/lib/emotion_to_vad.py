@@ -35,3 +35,31 @@ MEAD_VAD: Mapping[str, tuple[float, float, float]] = {
 def emotion_to_vad(emotion: str) -> tuple[float, float, float]:
     """`emotion -> (V, A, D)`. Raises KeyError on unknown labels."""
     return MEAD_VAD[emotion.strip().lower()]
+
+
+def intensity_to_norm(emotion: str, intensity: int) -> float:
+    """`(emotion, MEAD intensity ∈ {1, 2, 3}) -> normalized intensity ∈ [0, 1]`.
+
+    Neutral clips have no emotional intensity, so they map to 0.0
+    regardless of the integer value MEAD encodes. Other emotions:
+    `i / 3` (i=1 → 0.33, i=2 → 0.67, i=3 → 1.0) — keeps the model's
+    `intensity_cond ∈ [0, 1]` knob interpretable as "fraction of peak".
+    """
+    if emotion.strip().lower() == "neutral":
+        return 0.0
+    i = max(1, min(3, int(intensity)))
+    return i / 3.0
+
+
+def vad_with_intensity(
+    emotion: str, intensity: int,
+) -> tuple[float, float, float, float]:
+    """`(emotion, intensity) -> (V, A, D, intensity_norm)`.
+
+    The conditioning shape used by the d_vad=4 DiT during training. At
+    inference time, callers can override the 4th dim independently
+    (`--intensity-cond` knob in 05_sample_smoke.py) to produce
+    "fraction of peak" expressions or extrapolate past 1.0.
+    """
+    v, a, d = emotion_to_vad(emotion)
+    return (v, a, d, intensity_to_norm(emotion, intensity))

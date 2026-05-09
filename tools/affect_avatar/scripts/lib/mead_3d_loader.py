@@ -39,9 +39,11 @@ ACTION_DIM = 54
 # `{actor}_video/video/front/{emotion}/level_{intensity}/{utt}.mp4` (main parquet,
 # named-actor variants), or
 # `video28/video/front/{emotion}/level_{intensity}/{utt}.mp4` (one main-parquet
-# actor that uses the generic-numbered convention).
+# actor that uses the generic-numbered convention), or
+# `video_19/video/front/...` (underscored generic actor IDs in the
+# multi-shard parquets).
 _PATH_RE_WITH_ACTOR = re.compile(
-    r"^(?P<actor>[A-Za-z0-9]+?)(?:_video)?/video/front/"
+    r"^(?P<actor>[A-Za-z0-9_]+?)(?:_video)?/video/front/"
     r"(?P<emotion>[a-z]+)/level_(?P<intensity>\d+)/(?P<utt>[^/]+)\.[^/.]+$"
 )
 
@@ -293,21 +295,43 @@ def discover_parquets(data_dir: Path) -> list[tuple[Path, Optional[str], Optiona
     for sub in sorted(data_dir.iterdir()):
         if not sub.is_dir() or not sub.name.lower().startswith("mead_3d"):
             continue
-        parquet = _find_parquet(sub)
-        if parquet is None:
+        parquets = _find_parquets(sub)
+        if not parquets:
             continue
         suffix = sub.name[len("mead_3d"):].lstrip("_") or None
         # The "main" parquet has an empty suffix → actor_override=None,
         # so paths' embedded actor (W009 / video28) is used as-is.
-        actor_override = suffix if suffix else None
-        triples.append((parquet, actor_override, sub.name))
+        # Multi-actor dialects (`shard_NN`, `unified`) also encode actor
+        # in the path string and must NOT use the directory name as override.
+        if suffix and (suffix.startswith("shard_") or suffix == "unified"):
+            actor_override: Optional[str] = None
+        else:
+            actor_override = suffix if suffix else None
+        # Emit one triple per parquet file. Multi-file shards
+        # (`train-00000-of-00002.parquet` + `train-00001-of-00002.parquet`)
+        # would otherwise drop half the rows on the floor.
+        for parquet in parquets:
+            triples.append((parquet, actor_override, sub.name))
     return triples
 
 
 def _find_parquet(d: Path) -> Optional[Path]:
-    """Return the first `*.parquet` at `d` or `d/data/`, else None."""
+    """Return the first `*.parquet` at `d` or `d/data/`, else None.
+
+    Kept for backward compatibility; new code should prefer
+    `_find_parquets` which returns all matches.
+    """
+    parquets = _find_parquets(d)
+    return parquets[0] if parquets else None
+
+
+def _find_parquets(d: Path) -> list[Path]:
+    """Return every `*.parquet` at `d` or `d/data/`, sorted. The `data/`
+    subdir is skipped if `d` itself contains parquets, to avoid emitting
+    the same files twice when both layouts coexist."""
     for cand in (d, d / "data"):
         if cand.is_dir():
-            for f in sorted(cand.glob("*.parquet")):
-                return f
-    return None
+            files = sorted(cand.glob("*.parquet"))
+            if files:
+                return files
+    return []

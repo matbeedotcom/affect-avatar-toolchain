@@ -53,7 +53,7 @@ from lib.diffusion import (  # noqa: E402
     CosineSchedule, DiffusionConfig, diffusion_loss, q_sample,
 )
 from lib.dit import DiT1D, DiTConfig, count_params  # noqa: E402
-from lib.emotion_to_vad import emotion_to_vad  # noqa: E402
+from lib.emotion_to_vad import emotion_to_vad, vad_with_intensity  # noqa: E402
 from lib.mead_3d_loader import (  # noqa: E402
     ACTION_DIM,
     MeadParquet,
@@ -125,6 +125,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output", type=Path,
                    default=Path("artifacts/blendshape_dit.pt"))
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument(
+        "--resume", action="store_true",
+        help="If --output already exists and contains training state, "
+             "resume from the last completed epoch instead of starting "
+             "from scratch. The on-disk file is updated every epoch so "
+             "killed runs lose at most one epoch of work.",
+    )
     return p.parse_args()
 
 
@@ -196,7 +203,13 @@ def load_clips_from_parquet(
             latent = mu[0].cpu().numpy().astype(np.float32)
 
         whisper = np.load(cache)["hidden"].astype(np.float16)
-        vad = np.array(emotion_to_vad(emotion), dtype=np.float32)
+        # 4-D conditioning: (V, A, D, intensity_norm). Intensity is normalized
+        # to [0, 1] (neutral=0, MEAD i=1/2/3 -> 0.33/0.67/1.0) so the model
+        # can differentiate subtle vs peak emotion at the same V/A/D direction.
+        vad = np.array(
+            vad_with_intensity(emotion, int(meta.get("intensity", 0))),
+            dtype=np.float32,
+        )
 
         clips.append({
             "source_id": pq.source_id,
@@ -601,16 +614,98 @@ def main() -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     loss_csv = args.output.with_suffix(".csv")
-    csv_fh = loss_csv.open("w", newline="")
-    csv_w = csv.writer(csv_fh)
-    csv_w.writerow(["epoch", "lr", "train_loss", "val_online", "val_ema"])
 
-    print(f"\ntraining {args.epochs} epochs...", file=sys.stderr)
-    t_train = time.time()
+    # --- Resume support ---
+    # The on-disk checkpoint always contains best-EMA in `state_dict` (so
+    # inference scripts work mid-training) plus a `training_state` blob
+    # for resuming. After every completed epoch we overwrite it; at most
+    # one epoch of work is lost on a kill.
+    start_epoch = 0
     best_val = float("inf")
     best_state = None
     best_epoch = -1
-    for ep in range(args.epochs):
+    csv_mode = "w"
+    if args.resume and args.output.exists():
+        ckpt = torch.load(args.output, map_location=device, weights_only=False)
+        ts = ckpt.get("training_state")
+        if ts is None:
+            print(f"--resume: {args.output} has no training_state; "
+                  f"starting from scratch", file=sys.stderr)
+        else:
+            model.load_state_dict({k: v.to(device) for k, v in ts["online_state"].items()})
+            ema.shadow.load_state_dict(
+                {k: v.to(device) for k, v in ts["ema_shadow_state"].items()}
+            )
+            ema.step = int(ts["ema_step"])
+            optim.load_state_dict(ts["optim_state"])
+            sched.load_state_dict(ts["sched_state"])
+            start_epoch = int(ts["epochs_completed"])
+            best_val = float(ckpt.get("best_val_eps", float("inf")))
+            best_epoch = int(ckpt.get("best_epoch", -1))
+            best_state = {k: v.cpu() for k, v in ckpt["state_dict"].items()}
+            print(f"--resume: continuing from epoch {start_epoch + 1}/{args.epochs}; "
+                  f"best so far val_ema={best_val:.5f} at ep{best_epoch}",
+                  file=sys.stderr)
+            if start_epoch >= args.epochs:
+                print(f"--resume: ckpt is already complete "
+                      f"({start_epoch}/{args.epochs} epochs done); nothing to do",
+                      file=sys.stderr)
+                csv_fh = loss_csv.open("a", newline="")
+                csv_fh.close()
+                # Skip straight to final report by jumping past the loop.
+                va_ema = {"loss": best_val}
+                tr = {"loss": float("nan")}
+                va = va_ema
+                start_epoch = args.epochs
+            csv_mode = "a"
+    csv_fh = loss_csv.open(csv_mode, newline="")
+    csv_w = csv.writer(csv_fh)
+    if csv_mode == "w":
+        csv_w.writerow(["epoch", "lr", "train_loss", "val_online", "val_ema"])
+
+    def _save_checkpoint(*, epochs_completed: int) -> None:
+        """Atomic-ish save: write to .tmp, rename. Captures best-EMA in
+        `state_dict` and full resume state in `training_state`. Called
+        after every epoch."""
+        ckpt_obj = {
+            "state_dict": (
+                best_state if best_state is not None
+                else {k: v.detach().cpu().clone()
+                      for k, v in ema.shadow.state_dict().items()}
+            ),
+            "config": dit_cfg.__dict__,
+            "best_val_eps": float(best_val if best_val != float("inf") else 0.0),
+            "best_epoch": int(best_epoch),
+            "epochs_trained": int(epochs_completed),
+            "n_train_clips": len(splits["train"]),
+            "n_val_clips": len(splits["val"]),
+            "n_test_clips": len(splits["test"]),
+            "zscore_latents": bool(args.zscore_latents),
+            "latent_mu": latent_mu,
+            "latent_std": latent_std,
+            "training_state": {
+                "online_state": {
+                    k: v.detach().cpu().clone()
+                    for k, v in model.state_dict().items()
+                },
+                "ema_shadow_state": {
+                    k: v.detach().cpu().clone()
+                    for k, v in ema.shadow.state_dict().items()
+                },
+                "ema_step": ema.step,
+                "optim_state": optim.state_dict(),
+                "sched_state": sched.state_dict(),
+                "epochs_completed": int(epochs_completed),
+            },
+        }
+        tmp = args.output.with_suffix(args.output.suffix + ".tmp")
+        torch.save(ckpt_obj, tmp)
+        tmp.replace(args.output)
+
+    print(f"\ntraining {args.epochs} epochs (from epoch {start_epoch + 1})...",
+          file=sys.stderr)
+    t_train = time.time()
+    for ep in range(start_epoch, args.epochs):
         t0 = time.time()
         tr = train_one_epoch(
             model=model, schedule=schedule, loader=train_loader,
@@ -648,6 +743,7 @@ def main() -> int:
             f"{va_ema['loss']:.6f}",
         ])
         csv_fh.flush()
+        _save_checkpoint(epochs_completed=ep + 1)
     va = va_ema  # report-friendly alias
 
     csv_fh.close()
@@ -657,10 +753,10 @@ def main() -> int:
         file=sys.stderr,
     )
 
-    # Restore the best-EMA snapshot before saving — final-epoch EMA
+    # Restore the best-EMA snapshot before final eval — final-epoch EMA
     # is typically overfit (val-loss climbs ~2× from minimum on a 2-speaker
-    # split). The on-disk checkpoint should be the model the test
-    # numbers actually reflect.
+    # split). The periodic save already wrote best-EMA into `state_dict`
+    # but we re-load it into `ema.shadow` so the test-eval below uses it.
     if best_state is not None:
         ema.shadow.load_state_dict({k: v.to(device) for k, v in best_state.items()})
         print(
@@ -669,8 +765,11 @@ def main() -> int:
             file=sys.stderr,
         )
 
+    # Final canonical save: drops `training_state` (no longer needed) and
+    # adds `final_val_eps`. Periodic saves left a `training_state`-bearing
+    # ckpt on disk; this overwrites with the lighter inference-only form.
     print(f"saving best-EMA -> {args.output}", file=sys.stderr)
-    torch.save({
+    final_obj = {
         "state_dict": ema.shadow.state_dict(),
         "config": dit_cfg.__dict__,
         "best_val_eps": float(best_val),
@@ -683,7 +782,10 @@ def main() -> int:
         "zscore_latents": bool(args.zscore_latents),
         "latent_mu": latent_mu,
         "latent_std": latent_std,
-    }, args.output)
+    }
+    tmp = args.output.with_suffix(args.output.suffix + ".tmp")
+    torch.save(final_obj, tmp)
+    tmp.replace(args.output)
 
     # Final test eval on the best-EMA weights.
     test_ds = DiTDataset(splits["test"], args.t_lat, t_aud_target,

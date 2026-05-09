@@ -34,7 +34,13 @@ class DiTConfig:
     n_heads: int = 6
     n_blocks: int = 8
     d_whisper: int = 1280
-    d_vad: int = 3                     # (valence, arousal, dominance)
+    # Conditioning vector layout. d_vad=3 is the legacy "valence, arousal,
+    # dominance" set. d_vad=4 adds a normalized intensity scalar in [0, 1]:
+    # 0 = no emotional intensity (e.g. neutral clips); 0.33/0.67/1.0 =
+    # MEAD intensity 1/2/3. Lets the model differentiate "subtle happy"
+    # from "peak happy" — without it the V/A/D signal is identical
+    # across MEAD intensities, and the model averages them.
+    d_vad: int = 4
     mlp_ratio: float = 4.0
     dropout: float = 0.0
     n_timesteps: int = 1000
