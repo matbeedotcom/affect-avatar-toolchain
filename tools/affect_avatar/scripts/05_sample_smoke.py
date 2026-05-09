@@ -127,14 +127,15 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--listener-mode", action="store_true",
-        help="Phase L0 of LISTENER_MODE_PLAN: zero out speech-coupled "
-             "channels (jawOpen, mouthFunnel, mouthRollLower/Upper, "
-             "mouthClose, mouthLeft/Right/Pucker, jawForward/Left/Right) "
-             "on the DiT sample before rendering. Empathic-mouth channels "
-             "(smile, frown, dimple, press, shrug, stretch, "
-             "lowerDown, upperUp) and upper-face channels stay active so "
-             "the assistant can still mirror affect without lip-syncing "
-             "to the user's words. No retrain required.",
+        help="Phase L0 of LISTENER_MODE_PLAN: zero out 19 speech-coupled "
+             "/ lip-sync-prone channels on the DiT sample before "
+             "rendering. Includes all jaw + mouth-shape channels "
+             "(close/funnel/left/right/pucker/rollLower/rollUpper) plus "
+             "mouthLowerDown / mouthUpperUp / mouthStretch / mouthPress "
+             "— all viseme-correlated even though some have semantic "
+             "affect uses. Surviving affect channels: mouthSmile, "
+             "mouthFrown, mouthDimple, mouthShrug + all upper-face. "
+             "No retrain required.",
     )
     p.add_argument(
         "--render-binary", type=Path,

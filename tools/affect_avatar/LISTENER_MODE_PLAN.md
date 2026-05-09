@@ -29,13 +29,22 @@ permissiveness for a listener:
 
 | group | indices | listener policy |
 |---|---|---|
-| **speech-only** (lip-sync, jaw) | 22 jawForward, 23 jawLeft, 24 jawOpen, 25 jawRight, 26 mouthClose, 31 mouthFunnel, 32 mouthLeft, 37 mouthPucker, 38 mouthRight, 39 mouthRollLower, 40 mouthRollUpper | **zero out** at inference. These should not move while listening. |
-| **affect-mouth** (smile / frown / dimple / press) | 27/28 mouthDimple, 29/30 mouthFrown, 33/34 mouthLowerDown, 35/36 mouthPress, 41/42 mouthShrug, 43/44 mouthSmile, 45/46 mouthStretch, 47/48 mouthUpperUp | **keep** — these encode empathic mirroring (smile back, sympathetic frown). |
+| **speech-only** (lip-sync, jaw, lip-shape) | 22 jawForward, 23 jawLeft, 24 jawOpen, 25 jawRight, 26 mouthClose, 31 mouthFunnel, 32 mouthLeft, 33/34 mouthLowerDown, 35/36 mouthPress, 37 mouthPucker, 38 mouthRight, 39 mouthRollLower, 40 mouthRollUpper, 45/46 mouthStretch, 47/48 mouthUpperUp | **zero out** at inference. 19 channels — every channel that fires phoneme-rate on speaker audio. |
+| **affect-mouth** (corner-shape only) | 27/28 mouthDimple, 29/30 mouthFrown, 41/42 mouthShrug, 43/44 mouthSmile | **keep** — these are corner-shape channels dominated by emotion expression, not phoneme articulation. Empathic mirroring lives here. |
 | **upper face** (brow / eye / cheek / nose) | 0–21, 5, 6/7, 49/50 | **keep** — emotion signal lives here. |
 
 Pure "kill all mouth" reads as creepy / dead-lower-face on the renderer.
 The split above keeps the affect cues live and only suppresses the
 speech-driven lip motion.
+
+**Calibration history**: a first-pass L0 zeroed only 11 channels (jaw +
+the obviously-speech subset of mouth_speech). Visible lip-sync
+remained because mouthLowerDown / mouthUpperUp / mouthStretch /
+mouthPress are *also* viseme-correlated (DiT v3 fired
+mouthUpperUp at peak=1.39 on M003 happy audio in listener mode). The
+corrected 19-channel mask drops those four pairs into the
+speech-only set; the surviving mouthSmile trajectory has CoV=0.09
+(sustained smile, not audio-rate variation).
 
 ## 3. Conditioning swap
 

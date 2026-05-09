@@ -74,18 +74,30 @@ GROUP_INDICES: dict[str, tuple[int, ...]] = {
 
 
 # Per [LISTENER_MODE_PLAN.md §2](../../LISTENER_MODE_PLAN.md):
-# Speech-coupled channels that should be zeroed in listener mode (the
-# assistant should not lip-sync to the user's words). Union of `jaw` +
-# `mouth_speech` from GROUP_INDICES, i.e. jawForward/Left/Right/Open
-# plus mouthClose / mouthFunnel / mouthLeft / mouthPucker / mouthRight
-# / mouthRollLower / mouthRollUpper. The `mouth_affect` group
-# (smile / frown / dimple / press / shrug / stretch / lower-down /
-# upper-up) stays active for empathic mirroring — a frozen-mouth
-# listener reads as creepy.
+# Speech-coupled / lip-sync-prone channels that must be zeroed in
+# listener mode so the assistant doesn't lip-sync to the user's words.
+#
+# First-pass L0 only zeroed jaw + 7 obviously-speech channels (close,
+# funnel, left, pucker, right, rollLower, rollUpper) — but the
+# remaining "mouth_affect" group still produced visible lip-sync,
+# because mouthLowerDown / mouthUpperUp / mouthStretch / mouthPress
+# are also viseme-correlated even though they have semantic affect
+# uses. DiT v3 fired mouthUpperUp at peak=1.39 on happy speaker audio
+# in listener mode — clearly lip-sync, not affect.
+#
+# Tightened set (19 channels): all of mouth_speech + jaw + the four
+# lip-shape channels above. Empathic-mirror channels that remain
+# active: mouthSmile (43/44), mouthFrown (29/30), mouthDimple (27/28),
+# mouthShrug (41/42) — i.e. corner-shape channels which are dominated
+# by emotion expression, not phoneme articulation.
 LISTENER_SPEECH_ONLY_CHANNELS: tuple[int, ...] = (
-    22, 23, 24, 25,                  # jaw: jawForward, jawLeft, jawOpen, jawRight
+    22, 23, 24, 25,                  # jaw: forward, left, open, right
     26, 31, 32, 37, 38, 39, 40,      # mouth speech-shape: close, funnel, left,
                                      # pucker, right, rollLower, rollUpper
+    33, 34,                          # mouthLowerDown L/R — vowel jaw drop
+    35, 36,                          # mouthPress L/R — labial consonants
+    45, 46,                          # mouthStretch L/R — wide vowels
+    47, 48,                          # mouthUpperUp L/R — lifted vowels / sneer
 )
 
 
