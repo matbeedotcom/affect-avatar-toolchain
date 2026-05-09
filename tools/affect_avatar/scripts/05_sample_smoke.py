@@ -138,6 +138,17 @@ def parse_args() -> argparse.Namespace:
              "No retrain required.",
     )
     p.add_argument(
+        "--listener-mouth-sigma", type=float, default=5.0,
+        help="In --listener-mode, additional Gaussian σ (in frames) "
+             "applied ONLY to the surviving affect-mouth channels "
+             "(mouthSmile / mouthFrown / mouthDimple / mouthShrug). "
+             "DiT learned smile dynamics correlated with speech "
+             "prosody, so even sustained-mean smile shows phoneme-rate "
+             "jitter (per-frame Δ p95 ~0.07 = visibly wiggly). σ=5 "
+             "frames (~166ms at 30fps) preserves smile-onset/offset "
+             "while suppressing the wiggle. σ=0 disables.",
+    )
+    p.add_argument(
         "--render-binary", type=Path,
         default=Path("target/release/examples/affect_face_smoke"),
         help="Path to the compiled `affect_face_smoke` binary.",
@@ -502,12 +513,31 @@ def _render_mp4_pair(*, actions_gt, sample, args, meta, audio_bytes) -> None:
     # LISTENER_MODE_PLAN.md §2 for the channel split rationale.
     if args.listener_mode:
         import numpy as np
-        from lib.vae import LISTENER_SPEECH_ONLY_CHANNELS
+        from lib.vae import (
+            LISTENER_SPEECH_ONLY_CHANNELS,
+            LISTENER_AFFECT_MOUTH_CHANNELS,
+        )
         sample_for_render = np.asarray(sample_for_render, dtype=np.float32).copy()
         sample_for_render[:, list(LISTENER_SPEECH_ONLY_CHANNELS)] = 0.0
         print(f"listener mode: zeroed {len(LISTENER_SPEECH_ONLY_CHANNELS)} "
               f"speech channels on sample (indices "
               f"{list(LISTENER_SPEECH_ONLY_CHANNELS)})", file=sys.stderr)
+        # Heavy smoothing on the surviving affect-mouth channels — they
+        # show phoneme-rate jitter even though their mean is sustained.
+        # Brow/eye/cheek/nose channels left alone so natural micro-motion
+        # (blinks, brow flicks) reads as alive, not frozen.
+        if args.listener_mouth_sigma and args.listener_mouth_sigma > 0:
+            from scipy.ndimage import gaussian_filter1d
+            mouth_idx = list(LISTENER_AFFECT_MOUTH_CHANNELS)
+            mouth_traj = sample_for_render[:, mouth_idx]
+            smoothed_mouth = gaussian_filter1d(
+                mouth_traj, sigma=float(args.listener_mouth_sigma), axis=0,
+            )
+            sample_for_render[:, mouth_idx] = smoothed_mouth
+            print(f"listener mode: smoothed {len(mouth_idx)} affect-mouth "
+                  f"channels with σ={args.listener_mouth_sigma} frames "
+                  f"(suppresses phoneme-rate corner-of-mouth wiggle)",
+                  file=sys.stderr)
 
     write_arkit_jsonl(map_mead_to_arkit(actions_gt), args.render_fps, jsonl_gt)
     write_arkit_jsonl(map_mead_to_arkit(sample_for_render), args.render_fps, jsonl_sm)

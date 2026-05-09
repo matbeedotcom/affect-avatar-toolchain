@@ -101,6 +101,22 @@ LISTENER_SPEECH_ONLY_CHANNELS: tuple[int, ...] = (
 )
 
 
+# Surviving "affect-only" mouth channels in listener mode — the
+# corner-shape channels that DiT fires for emotional expression rather
+# than phoneme articulation. Per L0 calibration these still show
+# audio-rate jitter (per-frame Δ p95 ~0.07) because the DiT learned
+# smile dynamics correlated with speech prosody. The smoke renderer
+# applies extra heavy smoothing (`--listener-mouth-sigma`) to just
+# these channels in listener mode to suppress phoneme-rate wiggle
+# while preserving smile-onset/offset across the clip.
+LISTENER_AFFECT_MOUTH_CHANNELS: tuple[int, ...] = (
+    27, 28,                          # mouthDimple L/R
+    29, 30,                          # mouthFrown L/R
+    41, 42,                          # mouthShrug L/R
+    43, 44,                          # mouthSmile L/R
+)
+
+
 class _ConvBlock(nn.Module):
     """Conv1d → GroupNorm → GELU. Optional stride-2 for temporal halving."""
 
