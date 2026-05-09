@@ -2,7 +2,23 @@
 
 Sketch for retargeting the existing speaker-conditioned AE+DiT into a
 listener that reacts to incoming user speech instead of generating its
-own. Companion to [`STAGE1_VAE_PLAN.md`](STAGE1_VAE_PLAN.md).
+own. Companion to [`STAGE1_VAE_PLAN.md`](STAGE1_VAE_PLAN.md) and
+[`INTEGRATION.md`](INTEGRATION.md).
+
+**Two architectures** were explored under this plan:
+  - **Path A — Masked DiT** (this doc, §1–§7): keep the AE v3 + DiT v3
+    pipeline, mask speech-coupled output channels, smooth the
+    affect-mouth corners. Phases L0/L1/L2 below cover progressive
+    integration.
+  - **Path B — VAD anchor lookup** ([`INTEGRATION.md`](INTEGRATION.md)):
+    skip the DiT entirely; interpolate among 21 emotion×intensity
+    anchors derived from MEAD aggregates. Sub-millisecond inference,
+    zero audio path → no possible lip-sync. **Recommended default for
+    runtime integration.**
+
+Path A remains useful for the *speaker* role of the assistant
+(when it's talking, audio-driven micro-motion matters). Path B is the
+listener default.
 
 ## 1. Why this is non-trivial
 
